@@ -1,0 +1,921 @@
+<!DOCTYPE html>  
+<html lang="es">  
+<head>  
+  <meta charset="UTF-8">  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">  
+  <title>Gráfica de Nodos Dinámica con OpenAI GPT-3.5</title>  
+  <script src="https://d3js.org/d3.v7.min.js"></script>  
+  <style>  
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: black;
+      color: white;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .main-container {
+      display: flex;
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    #graph-container {
+      flex: 1;
+      height: 600px;
+      border: 1px solid #333;
+      border-radius: 5px;
+      overflow: hidden;
+      position: relative;
+      background-color: black;
+    }
+    #relationships-panel {
+      width: 300px;
+      height: 600px;
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 5px;
+      padding: 15px;
+      overflow-y: auto;
+    }
+    .panel-title {
+      margin: 0 0 15px 0;
+      font-size: 1.2em;
+      color: #69b3a2;
+    }
+    svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .node {  
+      fill: #69b3a2;  
+      stroke: #fff;  
+      stroke-width: 1.5px;  
+      cursor: pointer;  
+      transition: fill 0.3s ease;
+    }
+    .node:hover {
+      fill: #41a58d;
+    }
+    .node.loading {
+      fill: #ffd700;
+      animation: pulse 1.5s infinite;
+    }
+    .node.root {
+      fill: #ff6b6b;
+    }
+    .node.highlighted {
+      fill: #ff9f1a;
+      stroke: #fff;
+      stroke-width: 3px;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+    .link {  
+      stroke: #666;  
+      stroke-opacity: 0.6;  
+      transition: stroke-opacity 0.3s ease;
+    }  
+    .link:hover {
+      stroke-opacity: 1;
+    }
+    .link.highlighted {
+      stroke: #ff9f1a;
+      stroke-opacity: 1;
+      stroke-width: 3px;
+    }
+    text {  
+      font-family: Arial, sans-serif;  
+      font-size: 12px;  
+      fill: white;  
+      pointer-events: none;
+      text-shadow: 0 0 3px black, 0 0 3px black, 0 0 3px black;
+    }
+    .controls {
+      max-width: 1400px;
+      margin: 20px auto;
+      padding: 15px;
+      background: #222;
+      border-radius: 5px;
+      border: 1px solid #333;
+      color: white;
+    }
+    .start-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    #startWord {
+      flex: 1;
+      padding: 8px;
+      border: 1px solid #444;
+      border-radius: 4px;
+      background: #333;
+      color: white;
+    }
+    #startButton, #languageToggle {
+      padding: 8px 15px;
+      background: #69b3a2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    #startButton:hover, #languageToggle:hover {
+      background: #41a58d;
+    }
+    #languageToggle {
+      background: #666;
+      margin-top: 10px;
+    }
+    #languageToggle:hover {
+      background: #777;
+    }
+    .relationship-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      pointer-events: none;
+    }
+    .relationship-modal.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-content {
+      background: #222;
+      padding: 30px;
+      border-radius: 12px;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    }
+    .modal-title {
+      color: #69b3a2;
+      margin-bottom: 25px;
+      font-size: 1.6em;
+      border-bottom: 2px solid #333;
+      padding-bottom: 15px;
+    }
+    .modal-description {
+      color: white;
+      line-height: 1.8;
+      margin-bottom: 25px;
+      font-size: 1.1em;
+      white-space: pre-line;
+    }
+    .modal-examples {
+      color: #ccc;
+      font-style: italic;
+      line-height: 1.6;
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+      white-space: pre-line;
+    }
+    .zoom-controls {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      display: flex;
+      gap: 5px;
+      z-index: 100;
+      background: rgba(34, 34, 34, 0.8);
+      padding: 5px;
+      border-radius: 4px;
+    }
+    .zoom-btn {
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #333;
+      border: 1px solid #444;
+      border-radius: 4px;
+      font-size: 18px;
+      cursor: pointer;
+      color: white;
+      transition: background-color 0.3s ease;
+    }
+    .zoom-btn:hover {
+      background: #444;
+    }
+    .zoom-info {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(34, 34, 34, 0.8);
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: white;
+      z-index: 100;
+    }
+    .main-container.hidden {
+      display: none;
+    }
+    .relationship {
+      background: #333;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .relationship:hover {
+      background: #444;
+    }
+    .relationship-words {
+      color: #69b3a2;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .relationship-description {
+      color: #ddd;
+      font-size: 0.9em;
+      line-height: 1.4;
+    }
+  </style>  
+</head>  
+<body>  
+  <h1>Gráfica de Nodos Dinámica con OpenAI GPT-3.5</h1>
+  
+  <div class="controls">
+    <div class="start-container">
+      <input type="text" id="startWord" placeholder="Ingresa una palabra para comenzar" />
+      <button id="startButton">Comenzar</button>
+    </div>
+    <button id="languageToggle">🌐 Español</button>
+    <p>Haz clic en un nodo para expandirlo y obtener conceptos relacionados usando OpenAI GPT-3.5</p>
+    <p><small>Usa la rueda del ratón para hacer zoom, y arrastra para mover el gráfico.</small></p>
+  </div>
+  
+  <div class="main-container hidden">
+    <div id="graph-container">
+      <div class="zoom-controls">
+        <div class="zoom-btn" id="zoom-in">+</div>
+        <div class="zoom-btn" id="zoom-reset">⟲</div>
+        <div class="zoom-btn" id="zoom-out">-</div>
+      </div>
+      <div class="zoom-info">Zoom: 100%</div>
+    </div>
+    <div id="relationships-panel">
+      <h3 class="panel-title">Relaciones entre Conceptos</h3>
+      <div id="relationships"></div>
+    </div>
+  </div>
+
+  <div class="relationship-modal" id="relationshipModal">
+    <div class="modal-content">
+      <h2 class="modal-title"></h2>
+      <div class="modal-description"></div>
+      <div class="modal-examples"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Get API configuration from environment variables
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const apiUrl = import.meta.env.VITE_OPENAI_API_URL;
+    const modelName = import.meta.env.VITE_OPENAI_MODEL;
+
+    // Helper function for API calls
+    async function callLLMAPI(messages, maxTokens = 1000) {
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages,
+            temperature: 0.7,
+            max_tokens: maxTokens
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.choices[0].message.content.trim();
+      } catch (error) {
+        console.error('LLM API Error:', error);
+        throw error;
+      }
+    }
+
+    // Language configuration
+    const languages = {
+      es: {
+        placeholder: "Ingresa una palabra para comenzar",
+        startButton: "Comenzar",
+        languageButton: "🌐 Español",
+        instructions: "Haz clic en un nodo para expandirlo y obtener conceptos relacionados usando OpenAI GPT-3.5",
+        zoomInstructions: "Usa la rueda del ratón para hacer zoom, y arrastra para mover el gráfico",
+        panelTitle: "Relaciones entre Conceptos",
+        noRelationships: "No hay suficientes conceptos relacionados para analizar",
+        analyzing: "Analizando relaciones...",
+        error: "Error al obtener conceptos relacionados",
+        clickToView: "Haz clic en un nodo para ver sus relaciones"
+      },
+      en: {
+        placeholder: "Enter a word to start",
+        startButton: "Start",
+        languageButton: "🌐 English",
+        instructions: "Click on a node to expand it and get related concepts using OpenAI GPT-3.5",
+        zoomInstructions: "Use mouse wheel to zoom, and drag to move the graph",
+        panelTitle: "Concept Relationships",
+        noRelationships: "Not enough related concepts to analyze",
+        analyzing: "Analyzing relationships...",
+        error: "Error getting related concepts",
+        clickToView: "Click on a node to view its relationships"
+      }
+    };
+
+    let currentLanguage = 'es';
+
+    function updateLanguage(lang) {
+      currentLanguage = lang;
+      document.getElementById('startWord').placeholder = languages[lang].placeholder;
+      document.getElementById('startButton').textContent = languages[lang].startButton;
+      document.getElementById('languageToggle').textContent = languages[lang].languageButton;
+      document.querySelector('.controls p').textContent = languages[lang].instructions;
+      document.querySelector('.controls p small').textContent = languages[lang].zoomInstructions;
+      document.querySelector('.panel-title').textContent = languages[lang].panelTitle;
+      
+      const noRelationships = document.getElementById('no-relationships');
+      if (noRelationships) {
+        noRelationships.textContent = languages[lang].clickToView;
+      }
+    }
+
+    // Language toggle button handler
+    document.getElementById('languageToggle').addEventListener('click', function() {
+      const newLang = currentLanguage === 'es' ? 'en' : 'es';
+      updateLanguage(newLang);
+    });
+
+    // Modal handling
+    const modal = document.getElementById('relationshipModal');
+    
+    modal.addEventListener('click', function(e) {
+      if (e.target === modal) {
+        closeModal();
+      }
+    });
+
+    function openModal(title, words) {
+      const modalTitle = modal.querySelector('.modal-title');
+      const modalDescription = modal.querySelector('.modal-description');
+      const modalExamples = modal.querySelector('.modal-examples');
+      
+      modalTitle.textContent = title;
+      modalDescription.textContent = 'Loading detailed analysis...';
+      modalExamples.textContent = '';
+      
+      modal.classList.add('active');
+      
+      // Get detailed analysis from OpenAI
+      getDetailedAnalysis(words)
+        .then(analysis => {
+          modalDescription.textContent = analysis.description;
+          modalExamples.textContent = analysis.examples;
+        })
+        .catch(error => {
+          modalDescription.textContent = 'Error loading detailed analysis.';
+          console.error('Error:', error);
+        });
+    }
+
+    function closeModal() {
+      modal.classList.remove('active');
+    }
+
+    // Initial data  
+    let data = {  
+      nodes: [],  
+      links: []  
+    };  
+
+    // Graph configuration  
+    const width = 900;  
+    const height = 600;  
+
+    // Create SVG with zoom support
+    const svg = d3  
+      .select("#graph-container")  
+      .append("svg")
+      .attr("viewBox", [0, 0, width, height]);
+      
+    // Create main group affected by zoom
+    const g = svg.append("g");
+
+    // Global variables
+    let currentZoom = 1;
+    let transform = d3.zoomIdentity;
+    let rootNodeId = null;
+    let highlightedNodes = new Set();
+    let highlightedLinks = new Set();
+    let lastExpandedNode = null;
+
+    // Create groups for links, nodes and texts within main group
+    const linkGroup = g.append("g").attr("class", "links");
+    const nodeGroup = g.append("g").attr("class", "nodes");
+    const textGroup = g.append("g").attr("class", "texts");
+
+    // Define zoom behavior
+    const zoom = d3.zoom()
+      .extent([[0, 0], [width, height]])
+      .scaleExtent([0.1, 5])
+      .on("zoom", zoomed);
+    
+    // Apply zoom to SVG
+    svg.call(zoom);
+    
+    // Zoom function
+    function zoomed(event) {
+      transform = event.transform;
+      g.attr("transform", transform);
+      currentZoom = transform.k;
+      updateZoomInfo();
+    }
+    
+    // Update zoom info
+    function updateZoomInfo() {
+      document.querySelector('.zoom-info').textContent = `Zoom: ${Math.round(currentZoom * 100)}%`;
+    }
+    
+    // Center on last expanded node
+    function centerOnLastNode() {
+      if (!lastExpandedNode) return;
+      
+      const node = data.nodes.find(n => n.id === lastExpandedNode);
+      if (!node) return;
+      
+      const scale = 1;
+      const x = width / 2 - node.x * scale;
+      const y = height / 2 - node.y * scale;
+      
+      svg.transition()
+        .duration(750)
+        .call(
+          zoom.transform,
+          d3.zoomIdentity
+            .translate(x, y)
+            .scale(scale)
+        );
+    }
+    
+    // Zoom control buttons
+    document.getElementById('zoom-in').addEventListener('click', function() {
+      svg.transition().duration(300).call(zoom.scaleBy, 1.5);
+    });
+    
+    document.getElementById('zoom-out').addEventListener('click', function() {
+      svg.transition().duration(300).call(zoom.scaleBy, 0.6);
+    });
+    
+    document.getElementById('zoom-reset').addEventListener('click', function() {
+      centerOnLastNode();
+    });
+
+    // Simulation configuration
+    const simulation = d3  
+      .forceSimulation()
+      .force("link", d3.forceLink().id(d => d.id).distance(d => 100 / (d.source.level || 1)))  
+      .force("charge", d3.forceManyBody().strength(d => -200 * (d.level || 1)))  
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collision", d3.forceCollide().radius(d => getNodeRadius(d) * 1.2))
+      .force("x", d3.forceX(width / 2).strength(0.05))
+      .force("y", d3.forceY(height / 2).strength(0.05));  
+
+    // Calculate node radius
+    function getNodeRadius(node) {
+      const baseRadius = 10;
+      const levelFactor = 1 / (node.level || 1);
+      const connectionCount = data.links.filter(l => 
+        l.source.id === node.id || l.target.id === node.id
+      ).length;
+      return baseRadius * (1 + levelFactor) * (1 + Math.log(1 + connectionCount * 0.2));
+    }
+
+    // Function to calculate label position
+    function calculateLabelPosition(d) {
+      const radius = getNodeRadius(d);
+      const angle = Math.atan2(d.y - height / 2, d.x - width / 2);
+      const padding = radius + 10; // Distance from node edge to text
+      return {
+        x: d.x + Math.cos(angle) * padding,
+        y: d.y + Math.sin(angle) * padding
+      };
+    }
+
+    // Initialize empty selections
+    let link = linkGroup.selectAll("line");  
+    let node = nodeGroup.selectAll("circle");  
+    let text = textGroup.selectAll("text");  
+
+    function updateGraph() {  
+      link = link  
+        .data(data.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`)  
+        .join(
+          enter => enter.append("line")
+            .attr("class", "link")
+            .attr("stroke-width", d => 1 + 1 / (d.source.level || 1)),
+          update => update,
+          exit => exit.remove()
+        )
+        .attr("class", d => {
+          const linkId = `${d.source.id}-${d.target.id}`;
+          return `link ${highlightedLinks.has(linkId) ? 'highlighted' : ''}`;
+        });
+
+      node = node  
+        .data(data.nodes, d => d.id)  
+        .join(
+          enter => enter.append("circle")
+            .attr("class", d => getNodeClass(d))
+            .attr("r", getNodeRadius)
+            .on("click", (event, d) => expandNode(d.id))
+            .call(drag()),
+          update => update
+            .attr("class", d => getNodeClass(d))
+            .attr("r", getNodeRadius),
+          exit => exit.remove()
+        );  
+
+      text = text  
+        .data(data.nodes, d => d.id)  
+        .join(
+          enter => enter.append("text")
+            .attr("class", "text")
+            .attr("text-anchor", "middle")
+            .attr("dy", ".3em")
+            .text(d => d.id),
+          update => update.text(d => d.id),
+          exit => exit.remove()
+        );  
+
+      simulation.nodes(data.nodes);  
+      simulation.force("link").links(data.links);  
+      simulation.alpha(1).restart();
+      
+      if (data.nodes.length > 10) {
+        fitGraph();
+      }
+    }
+
+    // Get node class
+    function getNodeClass(d) {
+      const classes = ['node'];
+      if (d.id === rootNodeId) classes.push('root');
+      if (d.loading) classes.push('loading');
+      if (highlightedNodes.has(d.id)) classes.push('highlighted');
+      return classes.join(' ');
+    }
+    
+    // Fit graph in view
+    function fitGraph() {
+      if (data.nodes.length <= 1) return;
+      
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      data.nodes.forEach(node => {
+        if (node.x < minX) minX = node.x;
+        if (node.x > maxX) maxX = node.x;
+        if (node.y < minY) minY = node.y;
+        if (node.y > maxY) maxY = node.y;
+      });
+      
+      const margin = 50;
+      minX -= margin;
+      maxX += margin;
+      minY -= margin;
+      maxY += margin;
+      
+      const dx = maxX - minX;
+      const dy = maxY - minY;
+      const scale = Math.min(width / dx, height / dy, 0.9);
+      
+      const tx = (width - scale * (minX + maxX)) / 2;
+      const ty = (height - scale * (minY + maxY)) / 2;
+      
+      svg.transition().duration(500).call(
+        zoom.transform,
+        d3.zoomIdentity.translate(tx, ty).scale(scale)
+      );
+    }
+    
+    // Node drag behavior
+    function drag() {
+      return d3.drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended);
+    }
+
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+
+    simulation.on("tick", () => {  
+      link
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+        
+      node
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y);
+        
+      text.each(function(d) {
+        const pos = calculateLabelPosition(d);
+        d3.select(this)
+          .attr("x", pos.x)
+          .attr("y", pos.y);
+      });
+    });
+
+    // Display message when no relationships available
+    function displayNoRelationships(message = languages[currentLanguage].noRelationships) {
+      const container = document.getElementById('relationships');
+      container.innerHTML = `<div id="no-relationships">${message}</div>`;
+    }
+
+    // Display relationships
+    function displayRelationships(relationships) {
+      const container = document.getElementById('relationships');
+      container.innerHTML = '';
+
+      if (!relationships || relationships.length === 0) {
+        displayNoRelationships();
+        return;
+      }
+
+      relationships.forEach(rel => {
+        const div = document.createElement('div');
+        div.className = 'relationship';
+        
+        const wordsDiv = document.createElement('div');
+        wordsDiv.className = 'relationship-words';
+        wordsDiv.textContent = rel.words.join(' + ');
+        
+        const descDiv = document.createElement('div');
+        descDiv.className = 'relationship-description';
+        descDiv.textContent = rel.description;
+        
+        div.appendChild(wordsDiv);
+        div.appendChild(descDiv);
+        div.addEventListener('click', () => {
+          highlightRelationship(rel.words);
+          openModal(rel.words.join(' + '), rel.words);
+        });
+        container.appendChild(div);
+      });
+    }
+
+    // Get detailed analysis
+    async function getDetailedAnalysis(words) {
+      try {
+        const prompt = `Analyze the relationship between these concepts in detail: ${words.join(", ")}.
+                       ${currentLanguage === 'en' ? 'Please respond in English.' : 'Por favor responde en español.'}
+                       Provide:
+                       1. A detailed description of how these concepts are related
+                       2. Examples that illustrate their relationship`;
+
+        const content = await callLLMAPI([
+          {
+            role: "system",
+            content: `You are an expert in conceptual analysis and relationships.
+                     ${currentLanguage === 'en' ? 'Respond in English.' : 'Responde en español.'}`
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ], 2000);
+
+        const [description, ...examples] = content.split('\n\n');
+        return {
+          description: description.trim(),
+          examples: examples.join('\n\n').trim()
+        };
+      } catch (error) {
+        console.error('Error getting detailed analysis:', error);
+        return {
+          description: languages[currentLanguage].error,
+          examples: ''
+        };
+      }
+    }
+
+    // Highlight relationships
+    function highlightRelationship(words) {
+      clearHighlights();
+      
+      words.forEach(word => {
+        const node = data.nodes.find(n => n.id === word);
+        if (node) highlightedNodes.add(node.id);
+      });
+
+      data.links.forEach(link => {
+        if (words.includes(link.source.id) && words.includes(link.target.id)) {
+          highlightedLinks.add(`${link.source.id}-${link.target.id}`);
+        }
+      });
+
+      updateGraph();
+    }
+
+    // Clear highlights
+    function clearHighlights() {
+      highlightedNodes.clear();
+      highlightedLinks.clear();
+      updateGraph();
+    }
+
+    // Expand node
+    async function expandNode(nodeId) {
+      if (!apiKey) {
+        console.error('API key not found');
+        return;
+      }
+
+      lastExpandedNode = nodeId;
+      
+      const nodeIndex = data.nodes.findIndex(n => n.id === nodeId);
+      if (nodeIndex !== -1) {
+        data.nodes[nodeIndex].loading = true;
+        updateGraph();
+      }
+
+      try {
+        const prompt = `Generate 10 concepts related to "${nodeId}" that are:
+                       1. Parent categories or containers
+                       2. Specific subtypes or elements
+                       3. Directly related or dependent concepts
+                       4. Descriptive or associated concepts
+                       ${currentLanguage === 'en' ? 'Respond in English.' : 'Responde en español.'}
+                       Return only comma-separated concepts.`;
+
+        const content = await callLLMAPI([
+          {
+            role: "system",
+            content: `You are an expert in conceptual relationships.
+                     ${currentLanguage === 'en' ? 'Generate concepts in English.' : 'Genera conceptos en español.'}`
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ], 1000);
+
+        const relatedConcepts = content.split(',').map(c => c.trim()).filter(Boolean);
+        
+        const currentNode = data.nodes.find(n => n.id === nodeId);
+        const currentLevel = currentNode.level || 1;
+        
+        const newNodes = relatedConcepts
+          .filter(concept => !data.nodes.some(node => node.id === concept))
+          .map(concept => ({ 
+            id: concept, 
+            group: 1,
+            level: currentLevel + 1
+          }));
+          
+        const newLinks = newNodes.map(node => ({
+          source: nodeId,
+          target: node.id,
+        }));
+        
+        data.nodes = [...data.nodes, ...newNodes];
+        data.links = [...data.links, ...newLinks];
+        
+        const updatedNodeIndex = data.nodes.findIndex(n => n.id === nodeId);
+        if (updatedNodeIndex !== -1) {
+          data.nodes[updatedNodeIndex].loading = false;
+        }
+        
+        updateGraph();
+        await analyzeRelationships(nodeId, relatedConcepts);
+        centerOnLastNode();
+      } catch (error) {
+        console.error('Error expanding node:', error);
+        
+        const updatedNodeIndex = data.nodes.findIndex(n => n.id === nodeId);
+        if (updatedNodeIndex !== -1) {
+          data.nodes[updatedNodeIndex].loading = false;
+          updateGraph();
+        }
+        
+        displayNoRelationships(languages[currentLanguage].error);
+      }
+    }
+
+    // Analyze relationships
+    async function analyzeRelationships(nodeId, relatedConcepts) {
+      displayNoRelationships(languages[currentLanguage].analyzing);
+
+      try {
+        const prompt = `Analyze relationships between "${nodeId}" and: ${relatedConcepts.join(", ")}.
+                       Prioritize:
+                       1. Hierarchical relationships
+                       2. Dependency/causality
+                       3. Descriptive associations
+                       Format: "word1, word2: relationship description"
+                       ${currentLanguage === 'en' ? 'Respond in English.' : 'Responde en español.'}`;
+
+        const content = await callLLMAPI([
+          {
+            role: "system",
+            content: `You are an expert in semantic analysis.
+                     ${currentLanguage === 'en' ? 'Respond in English.' : 'Responde en español.'}`
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ], 1500);
+
+        const relationships = content
+          .split('\n')
+          .filter(line => line.trim())
+          .map(line => {
+            const [words, description] = line.split(':').map(s => s.trim());
+            return { words: words.split(',').map( w => w.trim()), description };
+          });
+
+        displayRelationships(relationships);
+      } catch (error) {
+        console.error('Error analyzing relationships:', error);
+        displayNoRelationships(languages[currentLanguage].error);
+      }
+    }
+
+    // Start button handler
+    document.getElementById('startButton').addEventListener('click', function() {
+      const startWord = document.getElementById('startWord').value.trim();
+      if (startWord) {
+        rootNodeId = startWord;
+        lastExpandedNode = startWord;
+        data.nodes = [{ id: startWord, group: 1, level: 1 }];
+        data.links = [];
+        document.querySelector('.main-container').classList.remove('hidden');
+        displayNoRelationships(languages[currentLanguage].clickToView);
+        updateGraph();
+        expandNode(startWord); // Automatically expand the root node
+      }
+    });
+
+    // Enter key handler for input
+    document.getElementById('startWord').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        document.getElementById('startButton').click();
+      }
+    });
+
+    // Make the graph responsive
+    window.addEventListener('resize', function() {
+      fitGraph();
+    });
+  </script>
+</body>
+</html>
